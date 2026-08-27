@@ -420,28 +420,34 @@ export default function GameShell() {
         highlight={tutStep !== null ? TUTORIAL[tutStep]?.highlight : undefined}
       />
 
-      {/* Desktop: map beside a scrolling rail. Mobile: tabs. */}
-      <div className="hidden gap-3 lg:grid lg:grid-cols-[1fr_340px]">
-        <div className="flex flex-col gap-2">{mapPanel}</div>
-        <div className="rail flex max-h-[78vh] flex-col gap-3 overflow-y-auto pr-1">
-          {routesPanel}
-          <div>
-            <SectionTitle>Hangar</SectionTitle>
-            <div className="mt-1.5">
+      {/*
+        One tree, two layouts. A panel shows when its tab is selected OR when
+        the viewport is wide enough to show everything at once.
+
+        This used to be two sibling branches — `hidden lg:grid` and `lg:hidden`
+        — which meant React mounted every panel twice, including the whole
+        65-site map, and re-rendered both copies on every tick. Only one was
+        ever visible; the other sat there measuring 0x0 and doing the work
+        anyway.
+      */}
+      <div className="gap-3 lg:grid lg:grid-cols-[1fr_340px]">
+        <div className={`flex-col gap-2 lg:flex ${tab === "map" ? "flex" : "hidden"}`}>
+          {mapPanel}
+        </div>
+        <div className="rail flex flex-col gap-3 lg:max-h-[78vh] lg:overflow-y-auto lg:pr-1">
+          <div className={`lg:block ${tab === "routes" ? "block" : "hidden"}`}>{routesPanel}</div>
+          <div className={`lg:block ${tab === "hangar" ? "block" : "hidden"}`}>
+            {/* The mobile tab bar already says "Hangar"; the heading is only
+                needed on desktop, where all three panels share the rail. */}
+            <div className="hidden lg:block">
+              <SectionTitle>Hangar</SectionTitle>
+            </div>
+            <div className="lg:mt-1.5">
               <Hangar state={state} onBuy={(id) => setState((s) => (s ? buyCraft(s, id) : s))} />
             </div>
           </div>
-          {worldPanel}
+          <div className={`lg:block ${tab === "world" ? "block" : "hidden"}`}>{worldPanel}</div>
         </div>
-      </div>
-
-      <div className="lg:hidden">
-        {tab === "map" && mapPanel}
-        {tab === "routes" && routesPanel}
-        {tab === "hangar" && (
-          <Hangar state={state} onBuy={(id) => setState((s) => (s ? buyCraft(s, id) : s))} />
-        )}
-        {tab === "world" && worldPanel}
       </div>
 
       {/* Mobile tab bar, thumb height, always reachable. */}
