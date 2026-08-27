@@ -2,20 +2,25 @@
 // across many seeds and reports how runs end. Used to set the numbers in
 // TUNE and the per-race goal targets.
 //
-//   npx tsx scripts/sim.ts [nightsCap] [seedsPerRace]
+//   npx tsx scripts/sim.ts [nightsCap] [seedsPerRace] [edition]
+//
+// edition is "us" (default) or "gc" — the engine is shared, so the same bot
+// plays either content pack.
 
 import {
   newGame, tick, chooseOption, passEvent, buildRoute, buyCraft, buildLab,
   routeError, canAfford, totalSuspicion,
 } from "../src/game/engine";
-import { RACES, type RaceDef } from "../src/game/races";
-import { SITES, siteXY } from "../src/game/sites";
-import { craftFor, crewsFor } from "../src/game/craft";
+import type { RaceDef } from "../src/game/races";
+import { CONTENT, type Edition } from "../src/game/content";
 import type { GameState, RaceId } from "../src/game/types";
 import { makeRng } from "../src/game/rng";
 
 const NIGHTS = Number(process.argv[2] ?? 400);
 const SEEDS = Number(process.argv[3] ?? 40);
+const EDITION = (process.argv[4] ?? "us") as Edition;
+const PACK = CONTENT[EDITION];
+const { races: RACES, sites: SITES, siteXY, craftFor, crewsFor } = PACK;
 
 function dist(a: string, b: string) {
   const [ax, ay] = siteXY(a);
@@ -26,7 +31,7 @@ function dist(a: string, b: string) {
 /** A bot that plays roughly the way the race intends to be played. */
 function play(race: RaceId, seed: number, nightsCap: number) {
   const def: RaceDef = RACES[race];
-  let s = newGame(race, seed);
+  let s = newGame(race, seed, EDITION);
   const rng = makeRng(seed ^ 0x9e3779b9);
 
   // Candidate sources, nearest-first — cheap routes are usually right.
@@ -145,7 +150,7 @@ const med = (a: number[]) => {
   return b[Math.floor(b.length / 2)];
 };
 
-console.log(`\n${SEEDS} seeds/race, ${NIGHTS}-night cap\n`);
+console.log(`\n${EDITION.toUpperCase()} edition — ${SEEDS} seeds/race, ${NIGHTS}-night cap\n`);
 console.log(
   "race".padEnd(8) +
     "win".padStart(5) + "lose".padStart(6) + "t/o".padStart(5) +

@@ -3,6 +3,9 @@
 
 export type StateCode = string;
 
+/** Which content pack a run is played with. See content.ts. */
+export type Edition = "us" | "gc";
+
 // ---------------------------------------------------------------------------
 // Factions
 // ---------------------------------------------------------------------------
@@ -279,6 +282,8 @@ export type LogEntry = {
 };
 
 export type GameState = {
+  /** Which map, sites, races and deck this run uses. */
+  edition: Edition;
   seed: number;
   rngCursor: number;
   phase: Phase;

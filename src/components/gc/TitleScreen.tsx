@@ -3,12 +3,14 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { RaceId } from "@/game/types";
-import { RACES, PLAYABLE } from "@/game/races";
-import { DECK_STATS } from "@/game/events";
+import { RACES, PLAYABLE } from "@/game/gc/races";
+import { DECK_STATS } from "@/game/gc/events";
+import { SITES } from "@/game/gc/sites";
+import { STATES } from "@/game/gc/map";
 import { seedLabel } from "@/game/rng";
 
 /** Module scope: rolling a seed is impure and must not happen during render. */
-function rollSeed(typed: number | null): number {
+function rollSemilla(typed: number | null): number {
   return typed ?? ((Math.random() * 0xffffffff) >>> 0);
 }
 
@@ -17,13 +19,13 @@ export default function TitleScreen({
 }: {
   onStart: (r: RaceId, seed: number, tutorial: boolean) => void;
 }) {
-  const [seedText, setSeedText] = useState("");
+  const [seedText, setSemillaText] = useState("");
   const [tutorial, setTutorial] = useState(true);
 
   // A typed seed hashes deterministically; an empty box means "roll one at
   // click time". It must not be rolled during render — the server and the
   // client would disagree and hydration would fail.
-  const typedSeed = useMemo(() => {
+  const typedSemilla = useMemo(() => {
     if (!seedText.trim()) return null;
     let h = 2166136261 >>> 0;
     for (let i = 0; i < seedText.length; i++) {
@@ -37,17 +39,18 @@ export default function TitleScreen({
     <div className="mx-auto max-w-4xl px-4 py-6 sm:py-10">
       <header className="text-center">
         <div className="mono text-[10px] uppercase tracking-[0.3em] text-ink3">
-          Sector 7 · North America · from July 1947
+          Sector 4 · Gran Colombia · desde noviembre de 1954
         </div>
         <div className="rule-thick my-2" />
         <h1 className="display press text-[42px] leading-[0.86] sm:text-[76px]">
-          UFOLOGISTICS
+          UFOLOGÍSTICA
         </h1>
         <div className="rule-thick my-2" />
         <p className="mx-auto max-w-2xl text-[14px] leading-relaxed text-ink2 sm:text-[16px]">
-          You run Earth&apos;s secret freight operation. Wire routes, move cargo, and keep the
-          papers from working out what you are. Somebody put a craft into a sheep pasture at
-          Roswell last month, and now the whole planet is watching the sky.
+          Usted dirige la operación secreta de carga de la Tierra sobre el Sector 4. Conecte
+          rutas, mueva carga y evite que los periódicos entiendan qué es usted. El año pasado,
+          en las afueras de Caracas, dos hombres declararon que algo intentó subirlos a una
+          nave. Desde entonces medio continente mira al cielo.
         </p>
       </header>
 
@@ -60,9 +63,9 @@ export default function TitleScreen({
             className="h-4 w-4 accent-[var(--spot)]"
           />
           <span>
-            <span className="uppercase tracking-wider">Guided first run</span>
+            <span className="uppercase tracking-wider">Primera partida guiada</span>
             <span className="block text-[10px] text-ink3">
-              An 11-step briefing that walks you through wiring your first route.
+              Un informe de once pasos que le acompaña mientras conecta su primera ruta.
             </span>
           </span>
         </label>
@@ -89,16 +92,16 @@ export default function TitleScreen({
                 ))}
               </ul>
               <div className="mono mt-2 grid grid-cols-2 gap-1 border-t border-ink pt-2 text-[10px]">
-                <span>Start: {r.currency.symbol} {r.startCash}</span>
-                <span>Routes: {r.maxRoutes}</span>
-                <span>Suspicion: ×{r.noiseMul}</span>
-                <span>Disclosure: {r.startDisclosure}%</span>
+                <span>Inicio: {r.currency.symbol} {r.startCash}</span>
+                <span>Rutas: {r.maxRoutes}</span>
+                <span>Sospecha: ×{r.noiseMul}</span>
+                <span>Divulgación: {r.startDisclosure}%</span>
               </div>
               <button
                 className="slab slab-dark mt-2.5 w-full px-3 py-2.5 text-[14px]"
-                onClick={() => onStart(id, rollSeed(typedSeed), tutorial)}
+                onClick={() => onStart(id, rollSemilla(typedSemilla), tutorial)}
               >
-                Run this operation
+                Dirigir esta operación
               </button>
             </div>
           );
@@ -107,30 +110,29 @@ export default function TitleScreen({
 
       <div className="mt-5 flex flex-col items-center gap-2">
         <label className="mono flex items-center gap-2 text-[11px] uppercase tracking-wider">
-          Seed
+          Semilla
           <input
             value={seedText}
-            onChange={(e) => setSeedText(e.target.value)}
-            placeholder="random"
+            onChange={(e) => setSemillaText(e.target.value)}
+            placeholder="al azar"
             className="w-40 border border-rule bg-paper px-2 py-1 text-[12px] normal-case tracking-normal"
           />
-          <span className="text-ink3">{typedSeed === null ? "rolled at start" : seedLabel(typedSeed)}</span>
+          <span className="text-ink3">{typedSemilla === null ? "rolled at start" : seedLabel(typedSemilla)}</span>
         </label>
         <p className="mono text-center text-[10px] leading-relaxed text-ink3">
-          {DECK_STATS.defs} authored events ·{" "}
-          {DECK_STATS.variants.toLocaleString()} distinct realisations · 64 sites · 48 states
+          {DECK_STATS.defs} eventos escritos ·{" "}
+          {DECK_STATS.variants.toLocaleString("es")} realizaciones distintas · {SITES.length} sitios ·{" "}
+          {STATES.length} estados
           <br />
-          The same seed replays the same world. Space bar pauses.
+          La misma semilla reproduce el mismo mundo. La barra espaciadora pausa.
         </p>
 
-        {/* Sister edition. Written in Spanish rather than translated, on its
-            own map, and sharing this one's engine. */}
         <p className="mono mt-4 text-center text-[11px] uppercase tracking-[0.18em]">
           <Link
-            href="/gran-colombia"
+            href="/"
             className="border-b border-spot/50 pb-0.5 text-spot transition-colors hover:border-spot"
           >
-            ¿Prefiere jugar en español? → Ufologística · Gran Colombia
+            Prefer English? → Ufologistics · Sector 7, North America
           </Link>
         </p>
       </div>

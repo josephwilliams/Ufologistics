@@ -97,6 +97,49 @@ page are recorded in `src/game/photos.ts` and shown in-game beneath each plate.
 State geometry is from **Natural Earth** (public domain), projected to Albers Equal Area
 Conic by `scripts/genmap.mjs`.
 
+## Segunda edición: Gran Colombia
+
+A second, fully Spanish edition lives at [`/gran-colombia`](src/app/gran-colombia). It is
+not a translation — it is its own map, its own sites and its own event deck, written in
+Spanish rather than run through one. Colombia, Venezuela, Ecuador and Panama, 92
+provinces, opening on the Venezuelan humanoid wave of November 1954.
+
+![Selección de raza en la edición Gran Colombia](docs/screenshots/gc-01-razas.png)
+
+The sites are real cases: the Cueva de los Tayos in Morona Santiago (Moricz's claimed
+metal library, and the 1976 expedition that had Neil Armstrong as honorary president) is
+the Mantid base; the Sierra Nevada de Santa Marta, which the Kogi call the Heart of the
+World, is the Nordic base; the Casanare llanos are the Grey base. Villa de Cura, Petare
+and Carora carry the 1954 encounters. The Relámpago del Catatumbo — real lightning on
+~260 nights a year, used for centuries as a navigational beacon — is the best natural
+cover on the map.
+
+![Tres rutas conectadas hacia Hato Corozal, con la sospecha extendiéndose por el llano](docs/screenshots/gc-02-juego.png)
+
+**The engine is shared, not copied.** `engine.ts`, `deck.ts` and the type layer are
+imported by both editions; `content.ts` holds a pack per edition (map, sites, races,
+craft, deck, calendar, and the strings the engine itself emits) and `GameState.edition`
+selects one. The reducer stays pure, so `npm run sim` plays either edition through
+exactly the same code path:
+
+```bash
+npm run sim                      # US edition
+npx tsx scripts/sim.ts 400 40 gc # Gran Colombia
+```
+
+Two things the balance sim caught that playtesting would have taken weeks to find. Gran
+Colombia is a far more compact region, so a Nordic leg completes in 4.3 nights instead of
+7.4 — at the US noise multiplier that produced 1.7× the suspicion per night, and because
+Nordic payouts scale *down* with suspicion while upkeep does not, the race went bankrupt
+in 40 runs out of 40. And the site risk values had been authored 25–40% above the US
+distribution, which quietly made the whole edition noisier. Both are fixed; the two
+editions now land within a few nights of each other:
+
+| | grey | nordic | mantid |
+|---|---|---|---|
+| US | 40/40 · 188n | 38/40 · 166n | 35/40 · 167n |
+| Gran Colombia | 40/40 · 189n | 40/40 · 160n | 40/40 · 153n |
+
 ## Licence
 
 [MIT](LICENSE) — use it, fork it, ship it, sell it. The only condition is that the

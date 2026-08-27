@@ -1,5 +1,6 @@
 import type {
   Craft,
+  Edition,
   CraftDef,
   TraitId,
   Effect,
@@ -12,17 +13,17 @@ import type {
   StateCode,
 } from "./types";
 import { makeRng, type Rng } from "./rng";
-import { RACES } from "./races";
-import { SITES, SITE_BY_ID, siteXY } from "./sites";
-import { STATES } from "./usmap";
 import { statesAlong } from "./geo";
-import { CORRIDOR_BY_ID, CRAFT_BY_ID, CREW_BY_ID } from "./craft";
-import { drawEvent, datelineFor } from "./events";
+import { contentOf } from "./content";
 
 // ---------------------------------------------------------------------------
 // Tuning constants. Collected here because they are the whole balance surface
 // and they were set by running scripts/sim.ts, not by intuition.
 // ---------------------------------------------------------------------------
+
+/** The content pack this run is played with. Keeps the reducer pure: the
+ *  edition travels on the state rather than in a module-level global. */
+const C = contentOf;
 
 export const TUNE = {
   /** Suspicion added per leg before all the multipliers. */
@@ -85,35 +86,36 @@ const TRAITS = [
 // Setup
 // ---------------------------------------------------------------------------
 
-function emptyHeat(): Record<StateCode, number> {
+function emptyHeat(states: { code: string }[]): Record<StateCode, number> {
   const h: Record<StateCode, number> = {};
-  for (const s of STATES) h[s.code] = 0;
+  for (const st of states) h[st.code] = 0;
   return h;
 }
 
-export function newGame(race: RaceId, seed: number): GameState {
-  const def = RACES[race];
+export function newGame(race: RaceId, seed: number, edition: Edition = "us"): GameState {
+  const pack = contentOf({ edition });
+  const def = pack.races[race];
   const rng = makeRng(seed);
 
   const sites: Record<string, SiteState> = {};
-  for (const s of SITES) {
-    sites[s.id] = {
-      id: s.id,
+  for (const site of pack.sites) {
+    sites[site.id] = {
+      id: site.id,
       stock: 1,
       specimens: [],
       isLab: false,
       sequences: [],
-      locked: !!s.startLocked,
+      locked: !!site.startLocked,
       spoiled: false,
     };
   }
 
   // Seeded world state: a handful of sites start more suspicious or richer than usual,
   // so the same race plays differently from seed to seed.
-  const suspicion = emptyHeat();
-  suspicion[SITE_BY_ID[def.homeId].state] = def.startDisclosure * 0.8;
-  for (const s of rng.sample(STATES, 5)) {
-    suspicion[s.code] = rng.range(4, 22);
+  const suspicion = emptyHeat(pack.states);
+  suspicion[pack.siteById[def.homeId].state] = def.startDisclosure * 0.8;
+  for (const st of rng.sample(pack.states, 5)) {
+    suspicion[st.code] = rng.range(4, 22);
   }
 
   const fleet: Craft[] = def.startCraft.map((defId, i) => ({
@@ -123,6 +125,7 @@ export function newGame(race: RaceId, seed: number): GameState {
   }));
 
   return {
+    edition,
     seed,
     rngCursor: rng.cursor(),
     phase: "playing",
@@ -152,7 +155,7 @@ export function newGame(race: RaceId, seed: number): GameState {
       {
         night: 0,
         kind: "system",
-        text: `${datelineFor(0)} — ${def.name} operation opens at ${SITE_BY_ID[def.homeId].name}.`,
+        text: pack.text.log.opened(pack.datelineFor(0), def.name, pack.siteById[def.homeId].name),
       },
     ],
     demands: race === "mantid" ? rng.sample(TRAITS, TUNE.demandCount).slice() : [],
@@ -166,11 +169,16 @@ export function newGame(race: RaceId, seed: number): GameState {
 // Route construction
 // ---------------------------------------------------------------------------
 
-export function routeDistance(fromId: string, toId: string, corridorId: string): number {
-  const [ax, ay] = siteXY(fromId);
-  const [bx, by] = siteXY(toId);
+export function routeDistance(
+  s: GameState,
+  fromId: string,
+  toId: string,
+  corridorId: string,
+): number {
+  const [ax, ay] = C(s).siteXY(fromId);
+  const [bx, by] = C(s).siteXY(toId);
   const raw = Math.hypot(bx - ax, by - ay);
-  return Math.max(30, raw * (CORRIDOR_BY_ID[corridorId]?.lengthMul ?? 1));
+  return Math.max(30, raw * (C(s).corridorById[corridorId]?.lengthMul ?? 1));
 }
 
 /** Why a proposed route is illegal, or null if it is fine. */
@@ -180,33 +188,33 @@ export function routeError(
   toId: string,
   craftId: string,
 ): string | null {
-  const def = RACES[s.race];
-  const from = SITE_BY_ID[fromId];
-  const to = SITE_BY_ID[toId];
-  if (!from || !to) return "Unknown site.";
-  if (fromId === toId) return "A route needs two different ends.";
-  if (s.routes.length >= def.maxRoutes) return `${def.name} may run only ${def.maxRoutes} routes.`;
-  if (s.sites[fromId].locked) return `${from.name} is not open to you yet.`;
-  if (s.sites[fromId].spoiled) return `${from.name} is spoiled.`;
+  const def = C(s).races[s.race];
+  const from = C(s).siteById[fromId];
+  const to = C(s).siteById[toId];
+  if (!from || !to) return C(s).text.err.unknownSite;
+  if (fromId === toId) return C(s).text.err.sameEnds;
+  if (s.routes.length >= def.maxRoutes) return C(s).text.err.tooManyRoutes(def.name, def.maxRoutes);
+  if (s.sites[fromId].locked) return C(s).text.err.locked(from.name);
+  if (s.sites[fromId].spoiled) return C(s).text.err.spoiled(from.name);
   // A lab is a valid source regardless of what kind of site it was built on —
   // that is the whole point of the second hop.
   if (!s.sites[fromId].isLab && !def.harvestKinds.includes(from.kind)) {
-    return `${def.name} cannot work a site of that kind.`;
+    return C(s).text.err.wrongKind(def.name);
   }
   const craft = s.fleet.find((c) => c.id === craftId);
-  if (!craft) return "No such craft.";
-  if (craft.routeId) return "That craft is already assigned.";
+  if (!craft) return C(s).text.err.noCraft;
+  if (craft.routeId) return C(s).text.err.craftBusy;
 
   // Destination rules differ by race: Mantid may deliver into a lab.
   if (s.race === "mantid") {
     if (toId !== def.homeId && !s.sites[toId].isLab) {
-      return "Mantid cargo must go to a lab or to Dulce.";
+      return C(s).text.err.mantidDest(C(s).siteById[def.homeId].name);
     }
   } else if (toId !== def.homeId) {
-    return `Deliveries must go to ${SITE_BY_ID[def.homeId].name}.`;
+    return C(s).text.err.mustDeliverTo(C(s).siteById[def.homeId].name);
   }
   if (s.routes.some((r) => r.fromId === fromId && r.toId === toId)) {
-    return "That leg is already wired.";
+    return C(s).text.err.alreadyWired;
   }
   return null;
 }
@@ -221,8 +229,8 @@ export function buildRoute(
 ): GameState {
   if (routeError(s, fromId, toId, craftId)) return s;
 
-  const [ax, ay] = siteXY(fromId);
-  const [bx, by] = siteXY(toId);
+  const [ax, ay] = C(s).siteXY(fromId);
+  const [bx, by] = C(s).siteXY(toId);
   const route: Route = {
     id: `r${s.night}-${s.routes.length}-${fromId}`,
     fromId,
@@ -232,7 +240,7 @@ export function buildRoute(
     corridorId,
     progress: 0,
     outbound: true,
-    distance: routeDistance(fromId, toId, corridorId),
+    distance: routeDistance(s, fromId, toId, corridorId),
     crosses: statesAlong(ax, ay, bx, by),
     runs: 0,
     paused: false,
@@ -245,7 +253,7 @@ export function buildRoute(
     log: pushLog(s.log, {
       night: s.night,
       kind: "system",
-      text: `Wired ${SITE_BY_ID[fromId].name} → ${SITE_BY_ID[toId].name}.`,
+      text: `Wired ${C(s).siteById[fromId].name} → ${C(s).siteById[toId].name}.`,
     }),
   };
 }
@@ -260,7 +268,7 @@ export function removeRoute(s: GameState, routeId: string): GameState {
     log: pushLog(s.log, {
       night: s.night,
       kind: "system",
-      text: `Stood down ${SITE_BY_ID[route.fromId].name} → ${SITE_BY_ID[route.toId].name}.`,
+      text: C(s).text.log.stoodDown(C(s).siteById[route.fromId].name, C(s).siteById[route.toId].name),
     }),
   };
 }
@@ -298,7 +306,7 @@ export function reconfigureRoute(
         craftId,
         crewId: patch.crewId ?? r.crewId,
         corridorId,
-        distance: routeDistance(r.fromId, r.toId, corridorId),
+        distance: routeDistance(s, r.fromId, r.toId, corridorId),
       };
     }),
   };
@@ -312,7 +320,7 @@ export function toggleRoutePaused(s: GameState, routeId: string): GameState {
 }
 
 export function buyCraft(s: GameState, defId: string): GameState {
-  const def = CRAFT_BY_ID[defId];
+  const def = C(s).craftById[defId];
   if (!def || s.cash < def.cost) return s;
   return {
     ...s,
@@ -331,7 +339,7 @@ export const LAB_COST = 180;
 export function buildLab(s: GameState, siteId: string): GameState {
   if (s.race !== "mantid") return s;
   if (s.cash < LAB_COST || s.sites[siteId].isLab) return s;
-  const site = SITE_BY_ID[siteId];
+  const site = C(s).siteById[siteId];
   if (!site || site.kind === "base") return s;
   return {
     ...s,
@@ -355,10 +363,10 @@ function pushLog(log: LogEntry[], entry: LogEntry): LogEntry[] {
 
 /** Cargo value for one completed delivery on this route. */
 export function deliveryValue(s: GameState, route: Route): number {
-  const race = RACES[s.race];
-  const cdef = CRAFT_BY_ID[s.fleet.find((c) => c.id === route.craftId)?.defId ?? ""];
-  const crew = CREW_BY_ID[route.crewId];
-  const from = SITE_BY_ID[route.fromId];
+  const race = C(s).races[s.race];
+  const cdef = C(s).craftById[s.fleet.find((c) => c.id === route.craftId)?.defId ?? ""];
+  const crew = C(s).crewById[route.crewId];
+  const from = C(s).siteById[route.fromId];
   const st = s.sites[route.fromId];
   if (!cdef || !crew || !from) return 0;
 
@@ -378,11 +386,11 @@ export function deliveryValue(s: GameState, route: Route): number {
 
 /** Suspicion generated by one completed leg, before it is spread over the corridor. */
 export function legNoise(s: GameState, route: Route): number {
-  const race = RACES[s.race];
-  const cdef = CRAFT_BY_ID[s.fleet.find((c) => c.id === route.craftId)?.defId ?? ""];
-  const crew = CREW_BY_ID[route.crewId];
-  const corridor = CORRIDOR_BY_ID[route.corridorId];
-  const from = SITE_BY_ID[route.fromId];
+  const race = C(s).races[s.race];
+  const cdef = C(s).craftById[s.fleet.find((c) => c.id === route.craftId)?.defId ?? ""];
+  const crew = C(s).crewById[route.crewId];
+  const corridor = C(s).corridorById[route.corridorId];
+  const from = C(s).siteById[route.fromId];
   if (!cdef || !crew || !corridor || !from) return 0;
   return (
     TUNE.noiseBase *
@@ -420,7 +428,7 @@ type Turn = {
 };
 
 /** Mantid: a lab shipping finished sequences home — the only place value banks. */
-function shipSequences(t: Turn, r: Route, hold: number): void {
+function shipSequences(t: Turn, s: GameState, r: Route, hold: number): void {
   const st = t.sites[r.fromId];
   const shipped = st.sequences.slice(0, hold);
   if (!shipped.length) return;
@@ -433,7 +441,7 @@ function shipSequences(t: Turn, r: Route, hold: number): void {
   t.log = pushLog(t.log, {
     night: t.night,
     kind: "run",
-    text: `${shipped.length} sequence${shipped.length > 1 ? "s" : ""} delivered to Dulce (+${shipped.reduce((a, g) => a + g, 0)} to the programme).`,
+    text: C(s).text.log.sequences(shipped.length, shipped.reduce((a, g) => a + g, 0), C(s).siteById[C(s).races[s.race].homeId].name),
   });
 }
 
@@ -457,12 +465,12 @@ function bankDelivery(t: Turn, s: GameState, r: Route): void {
   t.sites[r.fromId] = { ...st, stock: Math.max(0.25, st.stock - TUNE.stockDrain) };
 
   // Nordic's whole tension: tour a place while the state is hot and you burn it.
-  if (s.race === "nordic" && (t.suspicion[SITE_BY_ID[r.fromId].state] ?? 0) > TUNE.spoilAt) {
+  if (s.race === "nordic" && (t.suspicion[C(s).siteById[r.fromId].state] ?? 0) > TUNE.spoilAt) {
     t.sites[r.fromId] = { ...t.sites[r.fromId], spoiled: true };
     t.log = pushLog(t.log, {
       night: t.night,
       kind: "system",
-      text: `${SITE_BY_ID[r.fromId].name} is spoiled — the tours are worthless now.`,
+      text: C(s).text.log.spoiledTour(C(s).siteById[r.fromId].name),
     });
   }
 }
@@ -472,7 +480,7 @@ function unload(t: Turn, s: GameState, r: Route, cdef: CraftDef): void {
   const hold = Math.max(1, Math.round(cdef.capacity / 8));
   if (s.race !== "mantid") return bankDelivery(t, s, r);
 
-  if (t.sites[r.fromId].isLab && r.toId === RACES[s.race].homeId) shipSequences(t, r, hold);
+  if (t.sites[r.fromId].isLab && r.toId === C(s).races[s.race].homeId) shipSequences(t, s, r, hold);
   else if (t.sites[r.toId].isLab) carrySpecimens(t, r, hold);
 }
 
@@ -480,10 +488,10 @@ function unload(t: Turn, s: GameState, r: Route, cdef: CraftDef): void {
 function flyRoutes(t: Turn, s: GameState): Route[] {
   return s.routes.map((r) => {
     if (r.paused) return r;
-    const cdef = CRAFT_BY_ID[s.fleet.find((c) => c.id === r.craftId)?.defId ?? ""];
+    const cdef = C(s).craftById[s.fleet.find((c) => c.id === r.craftId)?.defId ?? ""];
     if (!cdef) return r;
 
-    t.cash -= (cdef.upkeep + (CREW_BY_ID[r.crewId]?.upkeep ?? 0)) * TUNE.upkeepScale;
+    t.cash -= (cdef.upkeep + (C(s).crewById[r.crewId]?.upkeep ?? 0)) * TUNE.upkeepScale;
 
     let progress = r.progress + cdef.speed / r.distance;
     let outbound = r.outbound;
@@ -495,7 +503,7 @@ function flyRoutes(t: Turn, s: GameState): Route[] {
       // Suspicion lands on arrival regardless of direction, at the source state
       // and — diluted — on everything the corridor overflies.
       const noise = legNoise(s, r);
-      const from = SITE_BY_ID[r.fromId];
+      const from = C(s).siteById[r.fromId];
       addSuspicion(t.suspicion, from.state, noise);
       for (const code of r.crosses) {
         if (code !== from.state) addSuspicion(t.suspicion, code, noise * TUNE.crossShare);
@@ -514,8 +522,8 @@ function flyRoutes(t: Turn, s: GameState): Route[] {
 
 /** Mantid only: towns grow specimens, labs refine them, neglect rots them. */
 function runMantidChain(t: Turn, s: GameState, demands: TraitId[]): void {
-  const race = RACES[s.race];
-  for (const site of SITES) {
+  const race = C(s).races[s.race];
+  for (const site of C(s).sites) {
     const st = t.sites[site.id];
 
     // A town under scrutiny stops producing. People go missing and the state
@@ -564,18 +572,18 @@ function runMantidChain(t: Turn, s: GameState, demands: TraitId[]): void {
 }
 
 /** Grey only: sloppy crews generate their own headlines. */
-function runGreyIncidents(t: Turn, routes: Route[]): void {
+function runGreyIncidents(t: Turn, s: GameState, routes: Route[]): void {
   for (const r of routes) {
     if (r.paused) continue;
     if (!t.rng.chance(TUNE.sloppyChance)) continue;
 
-    const from = SITE_BY_ID[r.fromId];
+    const from = C(s).siteById[r.fromId];
     addSuspicion(t.suspicion, from.state, 7);
     t.disclosure += 0.9;
     t.log = pushLog(t.log, {
       night: t.night,
       kind: "event",
-      text: `Sloppy handling on the ${from.name} run — a witness, a photograph, a small item in the paper.`,
+      text: C(s).text.log.sloppy(from.name),
     });
   }
 }
@@ -591,8 +599,8 @@ function coolStates(t: Turn): void {
 }
 
 /** Sites recover while nobody is working them. */
-function regrowStock(t: Turn): void {
-  for (const site of SITES) {
+function regrowStock(t: Turn, s: GameState): void {
+  for (const site of C(s).sites) {
     const st = t.sites[site.id];
     if (st.stock < 1) t.sites[site.id] = { ...st, stock: Math.min(1, st.stock + TUNE.stockRegen) };
   }
@@ -603,16 +611,14 @@ function resolveEnding(t: Turn, s: GameState): Pick<GameState, "phase" | "ending
   if (t.disclosure >= 100) {
     return {
       phase: "lost",
-      ending:
-        "Public disclosure. Your licence is revoked, the assets are seized, and Earth goes to auction. You are the reason there is now a word for what you were.",
+      ending: C(s).text.end.disclosed,
     };
   }
-  if (t.goal >= s.goalTarget) return { phase: "won", ending: RACES[s.race].winText };
+  if (t.goal >= s.goalTarget) return { phase: "won", ending: C(s).races[s.race].winText };
   if (t.cash < -400) {
     return {
       phase: "lost",
-      ending:
-        "Insolvent. The Federation calls in your licence against your debts and a rival takes over the sector by the end of the quarter.",
+      ending: C(s).text.end.insolvent,
     };
   }
   return { phase: s.phase, ending: s.ending };
@@ -645,9 +651,9 @@ export function tick(s: GameState): GameState {
 
   const routes = flyRoutes(t, s);
   if (s.race === "mantid") runMantidChain(t, s, demands);
-  if (s.race === "grey") runGreyIncidents(t, routes);
+  if (s.race === "grey") runGreyIncidents(t, s, routes);
   coolStates(t);
-  regrowStock(t);
+  regrowStock(t, s);
 
   // Events read the night as it now stands, so they are drawn against staged.
   const staged: GameState = {
@@ -667,7 +673,7 @@ export function tick(s: GameState): GameState {
   let pending = null as GameState["pending"];
   let recentEvents = s.recentEvents;
   if (eventCooldown <= 0) {
-    pending = drawEvent(staged, t.rng);
+    pending = C(s).drawEvent(staged, t.rng);
     if (pending) recentEvents = [pending.defId, ...recentEvents].slice(0, TUNE.recentMemory);
     eventCooldown = Math.floor(t.rng.range(TUNE.eventGapMin, TUNE.eventGapMax));
   }
@@ -737,7 +743,7 @@ export function passEvent(s: GameState): GameState {
     log: pushLog(s.log, {
       night: s.night,
       kind: "event",
-      text: `${ev.headline} — nothing you could afford would have helped. It runs.`,
+      text: C(s).text.log.unanswered(ev.headline),
     }),
   };
 }
@@ -851,11 +857,10 @@ export function chooseOption(s: GameState, index: number): GameState {
   let ending = next.ending;
   if (next.disclosure >= 100) {
     phase = "lost";
-    ending =
-      "Public disclosure. Your licence is revoked, the assets are seized, and Earth goes to auction.";
+    ending = C(s).text.end.disclosed;
   } else if (next.goal >= next.goalTarget) {
     phase = "won";
-    ending = RACES[next.race].winText;
+    ending = C(s).races[next.race].winText;
   }
 
   return {
@@ -907,8 +912,8 @@ export function nightlyNet(s: GameState): number {
   let net = 0;
   for (const r of s.routes) {
     if (r.paused) continue;
-    const cdef = CRAFT_BY_ID[s.fleet.find((c) => c.id === r.craftId)?.defId ?? ""];
-    const crew = CREW_BY_ID[r.crewId];
+    const cdef = C(s).craftById[s.fleet.find((c) => c.id === r.craftId)?.defId ?? ""];
+    const crew = C(s).crewById[r.crewId];
     if (!cdef || !crew) continue;
     net -= (cdef.upkeep + crew.upkeep) * TUNE.upkeepScale;
     // Two legs per delivery, so income per night is value / (2 * legNights).
