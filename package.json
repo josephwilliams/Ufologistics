@@ -1,0 +1,37 @@
+{
+  "name": "ufologistics",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint src scripts --ext .ts,.tsx",
+    "typecheck": "tsc --noEmit",
+    "genmap": "node scripts/genmap.mjs",
+    "check:sites": "tsx scripts/check/sites.ts",
+    "check:deck": "tsx scripts/check/deck.ts",
+    "check": "npm run typecheck && npm run lint && npm run check:sites && npm run check:deck",
+    "sim": "tsx scripts/sim.ts",
+    "genphotos": "node scripts/genphotos.mjs",
+    "artifact": "node scripts/genartifact.mjs"
+  },
+  "dependencies": {
+    "next": "16.2.9",
+    "react": "19.2.4",
+    "react-dom": "19.2.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.9",
+    "sharp": "^0.35.3",
+    "tailwindcss": "^4",
+    "tsx": "^4.19.2",
+    "typescript": "^5"
+  }
+}
