@@ -7,6 +7,8 @@ papers from working out what you are.
 Browser only, mobile friendly, works offline once loaded. Ships in two editions: a neon
 **night** print (default) and the original **newsprint day** print.
 
+![The operations map: routes in flight, suspicion blooming over New Mexico, and the press one bad night away from working it out](docs/screenshots/02-play.png)
+
 ```bash
 npm install
 npm run dev          # http://localhost:3000
@@ -34,6 +36,8 @@ Same map, three genuinely different games.
 | Routes | 9 | 4 | 6 |
 | Goal | 2,200 biomass | 1,900 hours of footage | 55 sequence-grades |
 | The game | triage — too many routes, sloppy crews, permanently on fire | restraint — you harvest nothing, and touring a hot state spoils the site for good | chains — two hops through labs you build yourself |
+
+![Race select: Zeta Greys, Pleiadian Nordics and Mantid Directorate](docs/screenshots/01-races.png)
 
 ## Playing
 
@@ -74,6 +78,15 @@ scripts/         generators and the balance harness
 dependency, which is what lets `npm run sim` play thousands of games headlessly. All
 tuning lives in one `TUNE` object at the top of that file — the numbers there were set
 from simulation output, not intuition.
+
+## Two editions
+
+Every site has a halftone plate — a real public-domain photograph reduced to 1-bit
+ordered dither and tinted through a CSS mask, so it recolours with the edition.
+
+| Night (default) | Day |
+|---|---|
+| ![Site inspector, night edition](docs/screenshots/03-site.png) | ![The same screen in the newsprint day edition](docs/screenshots/04-day.png) |
 
 ## Credits
 

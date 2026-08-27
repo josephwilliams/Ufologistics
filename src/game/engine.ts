@@ -1,6 +1,7 @@
 import type {
   Craft,
   CraftDef,
+  TraitId,
   Effect,
   GameState,
   LogEntry,
@@ -66,6 +67,12 @@ export const TUNE = {
   appealDivisor: 16,
   /** Cash and goal per grade-point of a delivered Mantid sequence. */
   sequenceValue: 26,
+  /** Mantid: how many traits the Directorate buys at once. */
+  demandCount: 3,
+  /** Mantid: nights before the standing order rotates. */
+  demandNights: 34,
+  /** Mantid: multiplier on an off-spec sequence — refined, but nobody wants it. */
+  offSpecMul: 0.3,
 };
 
 const TRAITS = [
@@ -148,6 +155,7 @@ export function newGame(race: RaceId, seed: number): GameState {
         text: `${datelineFor(0)} — ${def.name} operation opens at ${SITE_BY_ID[def.homeId].name}.`,
       },
     ],
+    demands: race === "mantid" ? rng.sample(TRAITS, TUNE.demandCount).slice() : [],
     eventCooldown: 6,
     recentEvents: [],
     ending: null,
@@ -505,12 +513,16 @@ function flyRoutes(t: Turn, s: GameState): Route[] {
 }
 
 /** Mantid only: towns grow specimens, labs refine them, neglect rots them. */
-function runMantidChain(t: Turn, s: GameState): void {
+function runMantidChain(t: Turn, s: GameState, demands: TraitId[]): void {
   const race = RACES[s.race];
   for (const site of SITES) {
     const st = t.sites[site.id];
 
-    if (race.harvestKinds.includes(site.kind) && !st.locked) {
+    // A town under scrutiny stops producing. People go missing and the state
+    // notices — this is Mantid's failure mode, and it hangs off the same alarm
+    // line as everything else: run loud and your supply dries up.
+    const watched = (t.suspicion[site.state] ?? 0) > TUNE.suspicionAlarm;
+    if (race.harvestKinds.includes(site.kind) && !st.locked && !watched) {
       if (t.rng.chance(TUNE.specimenSpawn) && st.specimens.length < 6) {
         t.sites[site.id] = {
           ...st,
@@ -529,8 +541,16 @@ function runMantidChain(t: Turn, s: GameState): void {
 
     const cur = t.sites[site.id];
     if (cur.isLab && cur.specimens.length && t.night % TUNE.labNights === 0) {
+      // Refining is where the matching happens: a specimen carrying a trait the
+      // Directorate wants keeps its full grade, anything else banks a token
+      // fraction. Feeding a lab the wrong specimens is the Mantid failure mode.
       const [done, ...rest] = cur.specimens;
-      t.sites[site.id] = { ...cur, specimens: rest, sequences: [...cur.sequences, done.grade] };
+      const wanted = done.traits.some((tr) => demands.includes(tr));
+      t.sites[site.id] = {
+        ...cur,
+        specimens: rest,
+        sequences: [...cur.sequences, wanted ? done.grade : done.grade * TUNE.offSpecMul],
+      };
     }
 
     const after = t.sites[site.id];
@@ -616,8 +636,15 @@ export function tick(s: GameState): GameState {
     rng: makeRng(s.seed, s.rngCursor),
   };
 
+  // The standing order rotates on a fixed cadence, forcing a rewire toward
+  // whichever towns are now growing something the Directorate wants.
+  const demands =
+    s.race === "mantid" && t.night % TUNE.demandNights === 0
+      ? t.rng.sample(TRAITS, TUNE.demandCount).slice()
+      : s.demands;
+
   const routes = flyRoutes(t, s);
-  if (s.race === "mantid") runMantidChain(t, s);
+  if (s.race === "mantid") runMantidChain(t, s, demands);
   if (s.race === "grey") runGreyIncidents(t, routes);
   coolStates(t);
   regrowStock(t);
@@ -633,6 +660,7 @@ export function tick(s: GameState): GameState {
     sites: t.sites,
     routes,
     log: t.log,
+    demands,
   };
 
   let eventCooldown = s.eventCooldown - 1;
@@ -714,13 +742,21 @@ export function passEvent(s: GameState): GameState {
   };
 }
 
-function applyEffect(s: GameState, e: Effect, focusState: StateCode | null, focusSite: string | null, focusRoute: string | null, rng: Rng): GameState {
+/** What an event is pointed at. Grouped because three consecutive nullable
+ *  string parameters are a transposition bug waiting to happen. */
+type EventFocus = {
+  state: StateCode | null;
+  siteId: string | null;
+  routeId: string | null;
+};
+
+function applyEffect(s: GameState, e: Effect, focus: EventFocus, rng: Rng): GameState {
   const suspicion = { ...s.suspicion };
   let sites = s.sites;
   let fleet = s.fleet;
   let routes = s.routes;
 
-  if (e.suspicion && focusState) addSuspicion(suspicion, focusState, e.suspicion);
+  if (e.suspicion && focus.state) addSuspicion(suspicion, focus.state, e.suspicion);
   if (e.suspicionAll) for (const code of Object.keys(suspicion)) addSuspicion(suspicion, code, e.suspicionAll);
 
   const factions = { ...s.factions };
@@ -731,25 +767,25 @@ function applyEffect(s: GameState, e: Effect, focusState: StateCode | null, focu
     }
   }
 
-  if (e.loseRoute && focusRoute) {
-    const r = routes.find((x) => x.id === focusRoute);
+  if (e.loseRoute && focus.routeId) {
+    const r = routes.find((x) => x.id === focus.routeId);
     if (r) {
-      routes = routes.filter((x) => x.id !== focusRoute);
-      fleet = fleet.map((c) => (c.routeId === focusRoute ? { ...c, routeId: null } : c));
+      routes = routes.filter((x) => x.id !== focus.routeId);
+      fleet = fleet.map((c) => (c.routeId === focus.routeId ? { ...c, routeId: null } : c));
     }
   }
-  if (e.loseCraft && focusRoute) {
-    const r = routes.find((x) => x.id === focusRoute);
+  if (e.loseCraft && focus.routeId) {
+    const r = routes.find((x) => x.id === focus.routeId);
     if (r) {
       fleet = fleet.filter((c) => c.id !== r.craftId);
-      routes = routes.filter((x) => x.id !== focusRoute);
+      routes = routes.filter((x) => x.id !== focus.routeId);
     }
   }
   if (e.grantCraft) {
     fleet = [...fleet, { id: `c${s.night}-g${fleet.length}`, defId: e.grantCraft, routeId: null }];
   }
-  if (e.spoilSite && focusSite) {
-    sites = { ...sites, [focusSite]: { ...sites[focusSite], spoiled: true } };
+  if (e.spoilSite && focus.siteId) {
+    sites = { ...sites, [focus.siteId]: { ...sites[focus.siteId], spoiled: true } };
   }
   if (e.unlockSite) {
     const lockedIds = Object.values(sites).filter((x) => x.locked).map((x) => x.id);
@@ -758,18 +794,18 @@ function applyEffect(s: GameState, e: Effect, focusState: StateCode | null, focu
       sites = { ...sites, [target]: { ...sites[target], locked: false } };
     }
   }
-  if (e.spawnSpecimens && focusSite) {
-    const st = sites[focusSite];
+  if (e.spawnSpecimens && focus.siteId) {
+    const st = sites[focus.siteId];
     const extra: Specimen[] = [];
     for (let i = 0; i < e.spawnSpecimens; i++) {
       extra.push({
-        id: `sp${s.night}-x${i}-${focusSite}`,
+        id: `sp${s.night}-x${i}-${focus.siteId}`,
         traits: [rng.pick(TRAITS), rng.pick(TRAITS)] as [string, string],
         grade: rng.chance(0.3) ? 3 : 2,
         born: s.night,
       });
     }
-    sites = { ...sites, [focusSite]: { ...st, specimens: [...st.specimens, ...extra] } };
+    sites = { ...sites, [focus.siteId]: { ...st, specimens: [...st.specimens, ...extra] } };
   }
 
   return {
@@ -809,7 +845,7 @@ export function chooseOption(s: GameState, index: number): GameState {
   const effect = backfire ? backfire.effect : choice.effect;
   const note = backfire ? backfire.note : choice.note;
 
-  next = applyEffect(next, effect, ev.focusStateCode, ev.focusSiteId, ev.focusRouteId, rng);
+  next = applyEffect(next, effect, { state: ev.focusStateCode, siteId: ev.focusSiteId, routeId: ev.focusRouteId }, rng);
 
   let phase: GameState["phase"] = next.phase;
   let ending = next.ending;

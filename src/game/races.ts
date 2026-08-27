@@ -131,7 +131,8 @@ export const RACES: Record<RaceId, RaceDef> = {
     rules: [
       "Two-hop chains: site → lab → home. A direct run is worth a fraction.",
       "You must build labs yourself, on sites you've already wired.",
-      "Specimens spawn with random traits and decay if you leave them.",
+      "The Directorate buys 3 traits at a time and rotates them. Off-spec sequences bank a token fraction.",
+      "A town in a state past the alarm line stops producing entirely.",
       "6 routes. Every one of them should be deliberate.",
     ],
     mechanic: "chains",
@@ -145,12 +146,14 @@ export const RACES: Record<RaceId, RaceDef> = {
     harvestKinds: ["town", "military", "anomaly"],
     yieldMul: 1,
     noiseMul: 0.9,
-    goalTarget: 55,
+    // Cut from 55 when the standing order landed: off-spec sequences bank a
+    // fraction, so raw throughput no longer converts 1:1 into quota.
+    goalTarget: 24,
     goalLabel: "Hybrid Program",
     goalObjective: "deliver {n} sequence-grades to the Hybrid Program",
     goalShort: "sequence count",
     winText:
-      "Fourteen viable sequences. The Directorate signs off, the hybrid line goes into production, and a generation of people who pass for human start filing into ordinary jobs in ordinary towns. Nobody will ever run a headline about this one.",
+      "The sequences check out. The Directorate signs off, the hybrid line goes into production, and a generation of people who pass for human start filing into ordinary jobs in ordinary towns. Nobody will ever run a headline about this one.",
   },
 };
 

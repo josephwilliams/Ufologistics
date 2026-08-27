@@ -24,6 +24,42 @@ const KIND_LABEL: Record<string, string> = {
   anomaly: "Anomaly",
 };
 
+/**
+ * One labelled dropdown on a route card. The craft, crew and corridor dials are
+ * structurally identical, so they share this rather than repeating the same
+ * select markup and class string three times.
+ */
+function Dial({
+  label,
+  value,
+  onChange,
+  options,
+  className = "",
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: { id: string; text: string }[];
+  className?: string;
+}) {
+  return (
+    <label className={`mono text-[9px] uppercase tracking-wider text-ink3 ${className}`}>
+      {label}
+      <select
+        className="mt-0.5 block w-full border border-rule bg-paper px-1 py-1 text-[11px] normal-case tracking-normal text-ink"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        {options.map((o) => (
+          <option key={o.id} value={o.id}>
+            {o.text}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 export function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
     <div className="mono border-b border-rule pb-1 text-[10px] uppercase tracking-[0.2em]">
@@ -179,6 +215,21 @@ export function SiteInspector({
         </div>
       )}
 
+      {state.race === "mantid" && st.specimens.length > 0 && (
+        <div className="mono mt-2 border border-rule px-2 py-1 text-[10px]">
+          <div className="text-ink3">SPECIMENS HELD</div>
+          {st.specimens.slice(0, 4).map((sp) => {
+            const wanted = sp.traits.some((tr) => state.demands.includes(tr));
+            return (
+              <div key={sp.id} className={wanted ? "text-spot" : "text-ink3"}>
+                {wanted ? "▸ " : "  "}grade {sp.grade} · {sp.traits.join(" + ")}
+                {wanted ? " · WANTED" : ""}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {state.race === "mantid" && (
         <div className="mono mt-2 flex items-center justify-between gap-2 text-[10px]">
           <span>
@@ -254,55 +305,39 @@ export function RouteRow({
       <div className="mt-1.5 grid grid-cols-2 gap-1.5">
         {/* Which hull flies this route. Only idle craft can be swapped in; the
             one currently assigned stays listed so the select has a value. */}
-        <label className="mono col-span-2 text-[9px] uppercase tracking-wider text-ink3">
-          Craft
-          <select
-            className="mt-0.5 block w-full border border-rule bg-paper px-1 py-1 text-[11px] normal-case tracking-normal text-ink"
-            value={route.craftId}
-            onChange={(e) => onReconfigure(route.id, { craftId: e.target.value })}
-          >
-            {state.fleet
-              .filter((c) => c.id === route.craftId || !c.routeId)
-              .map((c) => {
-                const d = CRAFT_BY_ID[c.defId];
-                return (
-                  <option key={c.id} value={c.id}>
-                    {d?.name ?? c.defId}
-                    {c.id === route.craftId ? " (flying this)" : " (idle)"} — cargo {d?.capacity},
-                    speed {d?.speed}, noise {d?.noise}
-                  </option>
-                );
-              })}
-          </select>
-        </label>
-        <label className="mono text-[9px] uppercase tracking-wider text-ink3">
-          Crew
-          <select
-            className="mt-0.5 block w-full border border-rule bg-paper px-1 py-1 text-[11px] normal-case tracking-normal text-ink"
-            value={route.crewId}
-            onChange={(e) => onReconfigure(route.id, { crewId: e.target.value })}
-          >
-            {crewsFor(state.race).map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name} — cargo ×{c.yieldMul}, noise ×{c.noiseMul}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="mono text-[9px] uppercase tracking-wider text-ink3">
-          Corridor
-          <select
-            className="mt-0.5 block w-full border border-rule bg-paper px-1 py-1 text-[11px] normal-case tracking-normal text-ink"
-            value={route.corridorId}
-            onChange={(e) => onReconfigure(route.id, { corridorId: e.target.value })}
-          >
-            {CORRIDORS.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name} — distance ×{c.lengthMul}, noise ×{c.noiseMul}
-              </option>
-            ))}
-          </select>
-        </label>
+        <Dial
+          label="Craft"
+          className="col-span-2"
+          value={route.craftId}
+          onChange={(v) => onReconfigure(route.id, { craftId: v })}
+          options={state.fleet
+            .filter((c) => c.id === route.craftId || !c.routeId)
+            .map((c) => {
+              const d = CRAFT_BY_ID[c.defId];
+              return {
+                id: c.id,
+                text: `${d?.name ?? c.defId}${c.id === route.craftId ? " (flying this)" : " (idle)"} — cargo ${d?.capacity}, speed ${d?.speed}, noise ${d?.noise}`,
+              };
+            })}
+        />
+        <Dial
+          label="Crew"
+          value={route.crewId}
+          onChange={(v) => onReconfigure(route.id, { crewId: v })}
+          options={crewsFor(state.race).map((c) => ({
+            id: c.id,
+            text: `${c.name} — cargo ×${c.yieldMul}, noise ×${c.noiseMul}`,
+          }))}
+        />
+        <Dial
+          label="Corridor"
+          value={route.corridorId}
+          onChange={(v) => onReconfigure(route.id, { corridorId: v })}
+          options={CORRIDORS.map((c) => ({
+            id: c.id,
+            text: `${c.name} — distance ×${c.lengthMul}, noise ×${c.noiseMul}`,
+          }))}
+        />
       </div>
 
       <div className="mono mt-1 text-[10px] leading-snug text-ink3">

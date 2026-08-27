@@ -44,9 +44,9 @@ export default function TitleScreen({
         </h1>
         <div className="rule-thick my-2" />
         <p className="mx-auto max-w-2xl text-[14px] leading-relaxed text-ink2 sm:text-[16px]">
-          You run Earth&apos;s secret harvesting operation. Wire routes, move cargo, and keep
-          the papers from working out what you are. Your predecessor crashed at Roswell and
-          nearly ended the whole arrangement — you inherit his suspicion.
+          You run Earth&apos;s secret freight operation. Wire routes, move cargo, and keep the
+          papers from working out what you are. Somebody put a craft into a sheep pasture at
+          Roswell last month, and now the whole planet is watching the sky.
         </p>
       </header>
 

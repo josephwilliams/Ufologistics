@@ -291,6 +291,13 @@ export type GameState = {
   /** Progress toward the race's win condition. */
   goal: number;
   goalTarget: number;
+  /**
+   * Mantid only: the traits the Directorate is currently buying. A specimen
+   * refined at a lab is worth its full grade only if it carries one of these;
+   * anything else is off-spec and ships for a fraction. Rotates during a run,
+   * which is what makes Mantid a matching puzzle rather than a haulage queue.
+   */
+  demands: TraitId[];
 
   suspicion: Record<StateCode, number>;
   factions: Record<FactionId, number>;

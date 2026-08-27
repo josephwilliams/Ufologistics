@@ -5,6 +5,14 @@ import { RACES } from "@/game/races";
 import { nightlyNet, totalSuspicion, statesOverAlarm, ALARM } from "@/game/engine";
 import { datelineFor } from "@/game/events";
 
+/** Full-scale for the nationwide suspicion bar: 48 states, and anything past
+ *  roughly a third of that is a map in real trouble. Display only — the loss
+ *  condition is Disclosure, and the alarm line lives in TUNE. */
+const SUSPICION_SCALE = 900;
+const SUSPICION_DANGER = 600;
+/** Disclosure is a percentage; flag it once it is closer to 100 than to 0. */
+const DISCLOSURE_DANGER = 65;
+
 function Meter({
   label,
   value,
@@ -157,11 +165,25 @@ export default function Hud({
           label="Disclosure"
           value={state.disclosure}
           max={100}
-          danger={state.disclosure > 65}
+          danger={state.disclosure > DISCLOSURE_DANGER}
           suffix="%"
         />
-        <Meter label="Suspicion (nationwide)" value={suspicion} max={900} danger={suspicion > 600} />
+        <Meter
+          label="Suspicion (nationwide)"
+          value={suspicion}
+          max={SUSPICION_SCALE}
+          danger={suspicion > SUSPICION_DANGER}
+        />
       </div>
+
+      {/* Mantid's standing order. It rotates mid-run, so it has to be visible
+          at all times or the matching puzzle is guesswork. */}
+      {state.race === "mantid" && state.demands.length > 0 && (
+        <div className="mono px-2.5 pb-1 text-[9px] uppercase tracking-[0.14em]">
+          <span className="text-ink3">Directorate wants </span>
+          <span className="text-spot">{state.demands.join(" · ")}</span>
+        </div>
+      )}
 
       {/* The one rule that decides the run, stated plainly. Disclosure only
           climbs on its own while a state sits past the alarm line. */}
