@@ -298,6 +298,91 @@ body {
   animation: coach-pulse 1.6s ease-out infinite;
 }
 
+/* ---------------------------------------------------------------------------
+   El botón de arranque: algo vivo debajo del casco.
+   Tres manchas de luz que se arrastran y laten bajo la superficie, más un
+   barrido lento que las cruza. Late siempre; al pasar el ratón acelera y sube
+   de intensidad; al pulsar, se acelera del todo.
+   --------------------------------------------------------------------------- */
+.alien-cta {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+.alien-cta > * {
+  position: relative;
+  z-index: 2;
+}
+/* Las burbujas. */
+.alien-cta::before {
+  content: "";
+  position: absolute;
+  inset: -60%;
+  z-index: 0;
+  /* Manchas oscuras bajo una membrana encendida: en «overlay» sobre un cian tan
+     claro el efecto se lavaba por completo, así que van en «multiply». */
+  background:
+    radial-gradient(38% 44% at 22% 62%, rgba(86, 0, 92, 0.85), transparent 62%),
+    radial-gradient(34% 40% at 72% 34%, rgba(12, 40, 96, 0.8), transparent 64%),
+    radial-gradient(30% 36% at 46% 84%, rgba(120, 0, 60, 0.7), transparent 62%);
+  filter: blur(7px);
+  mix-blend-mode: multiply;
+  opacity: 0.8;
+  animation: alien-bubble 11s ease-in-out infinite alternate;
+}
+/* El barrido. */
+.alien-cta::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(
+    100deg,
+    transparent 34%,
+    rgba(255, 255, 255, 0.5) 50%,
+    transparent 66%
+  );
+  background-size: 260% 100%;
+  animation: alien-sweep 7s linear infinite;
+}
+@keyframes alien-bubble {
+  0% {
+    transform: translate3d(-7%, 3%, 0) scale(1.05) rotate(0deg);
+  }
+  50% {
+    transform: translate3d(5%, -5%, 0) scale(1.22) rotate(7deg);
+  }
+  100% {
+    transform: translate3d(-3%, 6%, 0) scale(1.1) rotate(-5deg);
+  }
+}
+@keyframes alien-sweep {
+  from {
+    background-position: 160% 0;
+  }
+  to {
+    background-position: -60% 0;
+  }
+}
+/* Al pasar por encima: más rápido y más presente. */
+.alien-cta:hover::before {
+  animation-duration: 3.6s;
+  opacity: 1;
+  filter: blur(5px);
+}
+.alien-cta:hover::after {
+  animation-duration: 2.6s;
+}
+/* Al pulsar: hierve. */
+.alien-cta:active::before {
+  animation-duration: 1.3s;
+  opacity: 1;
+  filter: blur(3px);
+}
+.alien-cta:active::after {
+  animation-duration: 1s;
+}
+
 /* Title-screen entrance: one orchestrated load rather than scattered effects.
    Children set --d to stagger themselves. */
 @keyframes rise {
@@ -320,7 +405,9 @@ body {
   .alarm,
   .slam,
   .coach,
-  .rise {
+  .rise,
+  .alien-cta::before,
+  .alien-cta::after {
     animation: none;
   }
 }

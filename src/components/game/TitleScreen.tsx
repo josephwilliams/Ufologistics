@@ -5,13 +5,31 @@ import { useMemo, useState } from "react";
 import type { RaceId } from "@/game/types";
 import { RACES, PLAYABLE } from "@/game/races";
 import { DECK_STATS } from "@/game/events";
+import { SITES, SITE_BY_ID } from "@/game/sites";
+import { STATES } from "@/game/usmap";
 import { seedLabel } from "@/game/rng";
+import { CraftArt } from "./PixelArt";
+import Mark from "../Mark";
+
+/** The silhouette each operation is recognised by. */
+const SIGNATURE_HULL: Record<RaceId, string> = {
+  grey: "scout",
+  nordic: "liner",
+  mantid: "triangle",
+};
 
 /** Module scope: rolling a seed is impure and must not happen during render. */
 function rollSeed(typed: number | null): number {
   return typed ?? ((Math.random() * 0xffffffff) >>> 0);
 }
 
+/**
+ * Title screen.
+ *
+ * The three races used to sit here fully expanded — concept, four or five
+ * rules and a figures table, three times over. The top row now only *chooses*;
+ * the briefing for the selected race opens beneath it at a readable measure.
+ */
 export default function TitleScreen({
   onStart,
 }: {
@@ -19,6 +37,7 @@ export default function TitleScreen({
 }) {
   const [seedText, setSeedText] = useState("");
   const [tutorial, setTutorial] = useState(true);
+  const [picked, setPicked] = useState<RaceId>("grey");
 
   // A typed seed hashes deterministically; an empty box means "roll one at
   // click time". It must not be rolled during render — the server and the
@@ -33,107 +52,212 @@ export default function TitleScreen({
     return h >>> 0;
   }, [seedText]);
 
+  const race = RACES[picked];
+
   return (
-    <div className="mx-auto max-w-4xl px-4 py-6 sm:py-10">
-      <header className="text-center">
-        <div className="mono text-[10px] uppercase tracking-[0.3em] text-ink3">
-          Sector 7 · North America · from July 1947
+    <div className="mx-auto max-w-5xl px-5 pb-16 pt-10 sm:px-8 sm:pb-24 sm:pt-16">
+      <header className="rise text-center" style={{ ["--d" as string]: "0ms" }}>
+        <div className="mono text-[11px] uppercase tracking-[0.34em] text-ink3">
+          Sector 7 · North America
         </div>
-        <div className="rule-thick my-2" />
-        <h1 className="display press text-[42px] leading-[0.86] sm:text-[76px]">
-          UFOLOGISTICS
-        </h1>
-        <div className="rule-thick my-2" />
-        <p className="mx-auto max-w-2xl text-[14px] leading-relaxed text-ink2 sm:text-[16px]">
-          You run Earth&apos;s secret freight operation. Wire routes, move cargo, and keep the
-          papers from working out what you are. Somebody put a craft into a sheep pasture at
-          Roswell last month, and now the whole planet is watching the sky.
+        <div className="mt-5 flex items-center justify-center gap-4 sm:gap-5">
+          <Mark className="h-9 w-auto shrink-0 text-cyan drop-shadow-[0_0_10px_var(--cyan)] sm:h-12" />
+          <h1 className="display press text-[clamp(30px,8.2vw,66px)] leading-[0.86]">
+            UFOLOGISTICS
+          </h1>
+        </div>
+        <div className="rule-thick mx-auto mt-5 max-w-md" />
+        <p className="mx-auto mt-5 max-w-lg text-[17px] leading-relaxed text-ink2">
+          Run Earth&apos;s secret freight operation. Don&apos;t let the papers work out
+          what you are.
         </p>
+        <div className="mono mt-3 text-[11px] uppercase tracking-[0.2em] text-ink3">
+          From July 1947
+        </div>
       </header>
 
-      <div className="mt-5 flex justify-center">
-        <label className="paper-card mono flex cursor-pointer items-center gap-2.5 px-3 py-2 text-[12px]">
-          <input
-            type="checkbox"
-            checked={tutorial}
-            onChange={(e) => setTutorial(e.target.checked)}
-            className="h-4 w-4 accent-[var(--spot)]"
-          />
-          <span>
-            <span className="uppercase tracking-wider">Guided first run</span>
-            <span className="block text-[10px] text-ink3">
-              An 11-step briefing that walks you through wiring your first route.
-            </span>
-          </span>
-        </label>
+      <div
+        className="mono rise mt-14 text-center text-[11px] uppercase tracking-[0.3em] text-ink3"
+        style={{ ["--d" as string]: "90ms" }}
+      >
+        Choose your operation
       </div>
 
-      <div className="mt-4 grid gap-3 md:grid-cols-3">
+      <div
+        className="rise mt-4 grid items-stretch gap-3 sm:grid-cols-3"
+        style={{ ["--d" as string]: "150ms" }}
+      >
         {PLAYABLE.map((id) => {
           const r = RACES[id];
+          const on = id === picked;
           return (
-            <div key={id} className="paper-card flex flex-col p-3">
-              <div className="mono text-[9px] uppercase tracking-[0.18em] text-ink3">
-                {r.caste}
+            <button
+              key={id}
+              onClick={() => setPicked(id)}
+              aria-pressed={on}
+              className={`paper-card flex h-full flex-col px-5 py-5 text-left transition-all duration-200 ${
+                on
+                  ? "border-cyan bg-paper3/70 shadow-[0_0_0_2px_var(--cyan),0_0_18px_-2px_var(--cyan),inset_0_0_22px_-14px_var(--cyan)]"
+                  : "opacity-[0.82] hover:border-ink3 hover:opacity-100"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <span
+                  className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                  style={{ background: r.color, boxShadow: `0 0 8px ${r.color}` }}
+                />
+                <span className="mono truncate text-[10px] uppercase tracking-[0.18em] text-ink3">
+                  {r.caste.split(" · ")[0]}
+                </span>
+                {on && (
+                  <span className="mono ml-auto shrink-0 text-[10px] uppercase tracking-[0.16em] text-cyan">
+                    ✓ chosen
+                  </span>
+                )}
               </div>
-              <h2 className="display press mt-0.5 text-[24px] leading-none">{r.name}</h2>
-              <div className="mono mt-1 text-[11px] italic text-spot">{r.tagline}</div>
-              <div className="rule-thin my-2" />
-              <p className="text-[13px] leading-snug text-ink2">{r.concept}</p>
-              <ul className="mt-2 flex flex-1 flex-col gap-1">
-                {r.rules.map((rule, i) => (
-                  <li key={i} className="flex gap-1.5 text-[12px] leading-snug">
-                    <span className="mono text-spot">▪</span>
-                    <span>{rule}</span>
-                  </li>
-                ))}
-              </ul>
-              <div className="mono mt-2 grid grid-cols-2 gap-1 border-t border-ink pt-2 text-[10px]">
-                <span>Start: {r.currency.symbol} {r.startCash}</span>
-                <span>Routes: {r.maxRoutes}</span>
-                <span>Suspicion: ×{r.noiseMul}</span>
-                <span>Disclosure: {r.startDisclosure}%</span>
-              </div>
-              <button
-                className="slab slab-dark mt-2.5 w-full px-3 py-2.5 text-[14px]"
-                onClick={() => onStart(id, rollSeed(typedSeed), tutorial)}
+
+              <div
+                className={`mt-3 flex h-[74px] items-center justify-center border border-rule/60 bg-paper/40 px-2 transition-opacity ${
+                  on ? "" : "opacity-80"
+                }`}
               >
-                Run this operation
-              </button>
-            </div>
+                <CraftArt defId={SIGNATURE_HULL[id]} className="h-[54px] w-auto" />
+              </div>
+
+              <div className="display press mt-3 text-[25px] leading-[1.05] sm:min-h-[2.1em]">
+                {r.name}
+              </div>
+              <div className="mono mt-2 text-[12px] italic leading-snug text-spot sm:min-h-[2.6em]">
+                {r.tagline}
+              </div>
+              <dl className="mono mt-auto grid grid-cols-3 gap-2 border-t border-rule pt-3 text-[11px]">
+                <div>
+                  <dt className="text-ink3">Routes</dt>
+                  <dd className="mt-0.5 text-[15px]">{r.maxRoutes}</dd>
+                </div>
+                <div>
+                  <dt className="text-ink3">Noise</dt>
+                  <dd className="mt-0.5 text-[15px]">×{r.noiseMul}</dd>
+                </div>
+                <div>
+                  <dt className="text-ink3">Discl.</dt>
+                  <dd className="mt-0.5 text-[15px]">{r.startDisclosure}%</dd>
+                </div>
+              </dl>
+            </button>
           );
         })}
       </div>
 
-      <div className="mt-5 flex flex-col items-center gap-2">
-        <label className="mono flex items-center gap-2 text-[11px] uppercase tracking-wider">
-          Seed
+      <section key={picked} className="slam paper-card mt-3 px-6 py-7 sm:px-9 sm:py-9">
+        <div className="mono text-[11px] uppercase tracking-[0.22em] text-ink3">
+          {race.caste}
+        </div>
+
+        <p className="mt-4 max-w-2xl text-[17px] leading-[1.65] text-ink2">{race.concept}</p>
+
+        {/* Quadrants rather than bullets: each rule is a separate fact and reads
+            better boxed than in a list that looks like prose. With an odd rule
+            count the last one spans the full width so the grid isn't ragged. */}
+        <ul className="mt-7 grid gap-px overflow-hidden border border-rule bg-rule sm:grid-cols-2">
+          {race.rules.map((rule, i) => {
+            const lone = race.rules.length % 2 === 1 && i === race.rules.length - 1;
+            return (
+              <li
+                key={rule}
+                className={`flex gap-3 bg-paper2 px-5 py-4 text-[15px] leading-[1.55] text-ink2 ${
+                  lone ? "sm:col-span-2" : ""
+                }`}
+              >
+                <span aria-hidden className="mt-[7px] h-1.5 w-1.5 shrink-0 bg-spot" />
+                <span>{rule}</span>
+              </li>
+            );
+          })}
+        </ul>
+
+        <div className="mono mt-7 flex flex-wrap gap-x-8 gap-y-2 border-t border-rule pt-4 text-[12px] text-ink3">
+          <span>
+            Base: <span className="text-ink">{SITE_BY_ID[race.homeId].name}</span>
+          </span>
+          <span>
+            Starting capital:{" "}
+            <span className="text-ink">
+              {race.currency.symbol} {race.startCash}
+            </span>
+          </span>
+          <span>
+            Target:{" "}
+            <span className="text-ink">
+              {race.goalTarget.toLocaleString()} · {race.goalLabel.toLowerCase()}
+            </span>
+          </span>
+        </div>
+
+        <button
+          onClick={() => onStart(picked, rollSeed(typedSeed), tutorial)}
+          className="slab slab-dark alien-cta mt-7 w-full px-6 py-4 text-[17px]"
+        >
+          <span>Run this operation</span>
+        </button>
+      </section>
+
+      <div
+        className="rise mt-10 grid gap-3 sm:grid-cols-[1fr_auto]"
+        style={{ ["--d" as string]: "230ms" }}
+      >
+        <label className="paper-card flex cursor-pointer items-start gap-3 px-5 py-4">
+          <input
+            type="checkbox"
+            checked={tutorial}
+            onChange={(e) => setTutorial(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--spot)]"
+          />
+          <span>
+            <span className="mono block text-[12px] uppercase tracking-[0.16em]">
+              Guided first run
+            </span>
+            <span className="mt-1 block text-[14px] leading-snug text-ink3">
+              Eleven steps that walk you through wiring your first route.
+            </span>
+          </span>
+        </label>
+
+        <label className="paper-card flex items-center gap-3 px-5 py-4">
+          <span className="mono whitespace-nowrap text-[12px] uppercase tracking-[0.16em] text-ink3">
+            Seed
+          </span>
           <input
             value={seedText}
             onChange={(e) => setSeedText(e.target.value)}
             placeholder="random"
-            className="w-40 border border-rule bg-paper px-2 py-1 text-[12px] normal-case tracking-normal"
+            aria-label="Run seed"
+            className="mono w-28 border-b border-rule bg-transparent pb-1 text-[14px] text-ink outline-none placeholder:text-ink3 focus:border-spot"
           />
-          <span className="text-ink3">{typedSeed === null ? "rolled at start" : seedLabel(typedSeed)}</span>
+          {typedSeed !== null && (
+            <span className="mono text-[11px] text-ink3">{seedLabel(typedSeed)}</span>
+          )}
         </label>
-        <p className="mono text-center text-[10px] leading-relaxed text-ink3">
-          {DECK_STATS.defs} authored events ·{" "}
-          {DECK_STATS.variants.toLocaleString()} distinct realisations · 64 sites · 48 states
-          <br />
-          The same seed replays the same world. Space bar pauses.
-        </p>
-
-        {/* Sister edition. Written in Spanish rather than translated, on its
-            own map, and sharing this one's engine. */}
-        <p className="mono mt-4 text-center text-[11px] uppercase tracking-[0.18em]">
-          <Link
-            href="/gran-colombia"
-            className="border-b border-spot/50 pb-0.5 text-spot transition-colors hover:border-spot"
-          >
-            ¿Prefiere jugar en español? → Ufologística · Gran Colombia
-          </Link>
-        </p>
       </div>
+
+      <p
+        className="mono rise mt-10 text-center text-[11px] leading-loose tracking-wide text-ink3"
+        style={{ ["--d" as string]: "300ms" }}
+      >
+        {DECK_STATS.defs} authored events · {DECK_STATS.variants.toLocaleString()} distinct
+        realisations · {SITES.length} sites · {STATES.length} states
+        <br />
+        The same seed replays the same world. Space bar pauses.
+      </p>
+
+      <p className="rise mt-6 text-center" style={{ ["--d" as string]: "340ms" }}>
+        <Link
+          href="/gran-colombia"
+          className="mono text-[11px] uppercase tracking-[0.2em] text-ink3 underline decoration-ink3/40 underline-offset-[6px] transition-colors hover:text-spot hover:decoration-spot"
+        >
+          ¿Prefiere jugar en español? → Ufologística · Gran Colombia
+        </Link>
+      </p>
     </div>
   );
 }

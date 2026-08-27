@@ -9,7 +9,7 @@ import { SITES, SITE_BY_ID } from "@/game/gc/sites";
 import { STATES } from "@/game/gc/map";
 import { seedLabel } from "@/game/rng";
 import { CraftArt } from "./PixelArt";
-import Mark from "./Mark";
+import Mark from "../Mark";
 
 /** La silueta con la que se reconoce a cada operación en el cielo. */
 const NAVE_INSIGNIA: Record<RaceId, string> = {
@@ -159,13 +159,25 @@ export default function TitleScreen({
 
         <p className="mt-4 max-w-2xl text-[17px] leading-[1.65] text-ink2">{race.concept}</p>
 
-        <ul className="mt-7 grid gap-3.5 sm:grid-cols-2 sm:gap-x-10">
-          {race.rules.map((rule) => (
-            <li key={rule} className="flex gap-3 text-[15px] leading-[1.55] text-ink2">
-              <span aria-hidden className="mt-[7px] h-1.5 w-1.5 shrink-0 bg-spot" />
-              <span>{rule}</span>
-            </li>
-          ))}
+        {/* Cuadrantes, no viñetas: cada regla es un hecho independiente y se lee
+            mejor delimitada que en una lista que parece prosa. Con un número
+            impar de reglas, la última ocupa el ancho completo para que la
+            retícula no quede desportillada. */}
+        <ul className="mt-7 grid gap-px overflow-hidden border border-rule bg-rule sm:grid-cols-2">
+          {race.rules.map((rule, i) => {
+            const solitaria = race.rules.length % 2 === 1 && i === race.rules.length - 1;
+            return (
+              <li
+                key={rule}
+                className={`flex gap-3 bg-paper2 px-5 py-4 text-[15px] leading-[1.55] text-ink2 ${
+                  solitaria ? "sm:col-span-2" : ""
+                }`}
+              >
+                <span aria-hidden className="mt-[7px] h-1.5 w-1.5 shrink-0 bg-spot" />
+                <span>{rule}</span>
+              </li>
+            );
+          })}
         </ul>
 
         <div className="mono mt-7 flex flex-wrap gap-x-8 gap-y-2 border-t border-rule pt-4 text-[12px] text-ink3">
@@ -188,9 +200,9 @@ export default function TitleScreen({
 
         <button
           onClick={() => onStart(picked, rollSemilla(typedSemilla), tutorial)}
-          className="slab slab-dark mt-7 w-full px-6 py-4 text-[17px] shadow-none"
+          className="slab slab-dark alien-cta mt-7 w-full px-6 py-4 text-[17px]"
         >
-          Dirigir esta operación
+          <span>Dirigir esta operación</span>
         </button>
       </section>
 
