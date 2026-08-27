@@ -96,8 +96,10 @@
 }
 
 :root {
-  --font-display: ui-serif, Georgia, "Times New Roman", serif;
-  --font-body: ui-serif, Georgia, "Times New Roman", serif;
+  /* --font-serif comes from next/font (see app/layout.tsx); the stack after it
+     is what shows while the file loads and if it fails. */
+  --font-display: var(--font-serif), ui-serif, Georgia, "Times New Roman", serif;
+  --font-body: var(--font-serif), ui-serif, Georgia, "Times New Roman", serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 

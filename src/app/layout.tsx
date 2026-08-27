@@ -1,5 +1,32 @@
 import type { Metadata, Viewport } from "next";
+import { Source_Serif_4 } from "next/font/google";
 import "./globals.css";
+
+/**
+ * Body and display face.
+ *
+ * Georgia was fine on paper and muddy at 15px on a dark ground — thin strokes,
+ * small x-height, tight apertures. Source Serif 4 was drawn for screen reading:
+ * bigger x-height, open apertures and sturdier stems, so it holds up in the
+ * night edition without losing the newsprint register the game is built on.
+ *
+ * next/font self-hosts the files at build time, so there is no request to a
+ * font CDN at runtime.
+ */
+const serif = Source_Serif_4({
+  // Spanish accents live in `latin`; `latin-ext` is Central/Eastern European
+  // and would double the payload for glyphs neither edition renders.
+  //
+  // No `weight` list on purpose: Source Serif 4 is a variable font, so leaving
+  // it off ships two files (roman and italic) that cover every weight the UI
+  // uses — 400 body, 600 semibold, 700 figures, 900 display — instead of six
+  // static cuts that between them covered fewer.
+  subsets: ["latin"],
+  style: ["normal", "italic"],
+  variable: "--font-serif",
+  display: "swap",
+  fallback: ["ui-serif", "Georgia", "Times New Roman", "serif"],
+});
 
 export const metadata: Metadata = {
   title: "Ufologistics",
@@ -25,7 +52,7 @@ export default function RootLayout({
   // suppressHydrationWarning: THEME_BOOT rewrites data-theme before React
   // hydrates, which is the whole point of it — React must not fight that.
   return (
-    <html lang="en" data-theme="night" suppressHydrationWarning>
+    <html lang="en" data-theme="night" className={serif.variable} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT }} />
       </head>

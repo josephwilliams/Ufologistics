@@ -90,7 +90,46 @@ function flattenLayers(input) {
   return css;
 }
 
-const css = flattenLayers(readFileSync(cssFiles[0], "utf8"));
+/**
+ * Inline the webfonts.
+ *
+ * next/font self-hosts Source Serif 4 and the stylesheet points at
+ * ../media/*.woff2. Those are separate requests, and the artifact host blocks
+ * every one of them — the page would silently fall back to Georgia, which is
+ * the thing the font was chosen to replace. So the files travel in the CSS.
+ */
+function inlineFonts(css) {
+  const mediaDir = join(ROOT, ".next/static/media");
+  let inlined = 0;
+  const out = css.replace(/url\((?:\.\.\/)?media\/([^)"']+\.woff2)\)/g, (whole, file) => {
+    const p = join(mediaDir, file);
+    if (!existsSync(p)) return whole;
+    inlined++;
+    return `url(data:font/woff2;base64,${readFileSync(p).toString("base64")})`;
+  });
+  console.log(`· fonts ${inlined} woff2 inlined`);
+  return out;
+}
+
+/**
+ * Promote next/font's variable to :root.
+ *
+ * next/font hands the family over on a hashed class that Next puts on <html>.
+ * The artifact does not own that element — the host does — so `var(--font-serif)`
+ * resolved to nothing and every surface quietly fell back to Georgia. Lift the
+ * real declaration to :root so it applies without the class.
+ */
+function hoistFontVar(css) {
+  const m = css.match(/--font-serif:\s*("Source Serif 4"[^;}]*)/);
+  if (!m) {
+    console.log("· font var: not found (artifact would fall back)");
+    return css;
+  }
+  console.log("· font var hoisted to :root");
+  return `${css}\n:root{--font-serif:${m[1]};}`;
+}
+
+const css = hoistFontVar(inlineFonts(flattenLayers(readFileSync(cssFiles[0], "utf8"))));
 if (/@layer/.test(css)) throw new Error("@layer survived flattening — host reset would win.");
 console.log(`· css ${kb(css.length)} (layers flattened)`);
 
@@ -130,10 +169,31 @@ createRoot(document.getElementById("bt-root")!).render(<GameShell />);
 `,
 );
 
+/**
+ * next/link is meaningless here — the artifact is one file with no router — and
+ * pulling it in drags Next's client navigation code along, which reads
+ * `process.env` and dies on load with "process is not defined". A plain anchor
+ * is the correct behaviour, and the cross-edition link points at the deployed
+ * site since there is nowhere else for it to go.
+ */
+const linkShim = join(tmp, "link-shim.tsx");
+writeFileSync(
+  linkShim,
+  `import type { ReactNode } from "react";
+export default function Link({
+  href, children, ...rest
+}: { href: string; children?: ReactNode } & Record<string, unknown>) {
+  const abs = href.startsWith("/") ? \`https://ufologistics.vercel.app\${href}\` : href;
+  return <a href={abs} target="_blank" rel="noreferrer" {...rest}>{children}</a>;
+}
+`,
+);
+
 const inlinePhotos = {
   name: "inline-photos",
   setup(build) {
     build.onResolve({ filter: /^@\/game\/photos$/ }, () => ({ path: photosShim }));
+    build.onResolve({ filter: /^next\/link$/ }, () => ({ path: linkShim }));
   },
 };
 
